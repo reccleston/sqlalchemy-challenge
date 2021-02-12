@@ -4,6 +4,7 @@ import sqlalchemy
 from sqlalchemy.ext.automap import automap_base
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine, func
+from scipy import stats as sts
 
 engine = create_engine("sqlite:///Resources/hawaii.sqlite", echo=False)
 Base = automap_base()
@@ -21,8 +22,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    routes = ['milk', 'man', 'stam']
-    return routes[0]
+    return make_response(jsonify({'available_links': ['/api/v1.0/precipitation', '/api/v1.0/stations', '/api/v1.0/tobs', '/api/v1.0/<start>', '/api/v1.0/<start>/<end>']}))
 
 @app.route('/api/v1.0/precipitation')
 def prcp():
@@ -51,12 +51,39 @@ def tobs():
 
 @app.route('/api/v1.0/<start>')
 def start_date(start):
+    prcp_data = session.query(
+        Measurement.date, Measurement.prcp).filter(
+        Measurement.date >= start).all()
+
+    prcp = [days_prcp[1] for days_prcp in prcp_data if days_prcp[1]]
+
+    tmin = sts.tmin(prcp)
+    tmax = sts.tmax(prcp)
+    # tavg = sts.tavg(prcp)
+
+    return make_response(jsonify({start: {'tmin': tmin, 'tmax': tmax}}))
+
+@app.route('/api/v1.0/<start>/<end>')
+def start_end_date(start, end):
+    start_digits = start.split('-')
+    end_digits = end.split('-')
+
+    start = dt.datetime(int(start_digits[0]), int(start_digits[1]), int(start_digits[2]))
+    end = dt.datetime(int(end_digits[0]), int(end_digits[1]), int(end_digits[2]))
+
+    print(start, end)
 
     prcp_data = session.query(
-        Measurement.date, func.tmin(Measurement.prcp)).all()
+        Measurement.date, Measurement.prcp).filter(
+        Measurement.date.between(start, end)).all()
 
-    return make_response(jsonify(dict(prcp_data)))
+    prcp = [days_prcp[1] for days_prcp in prcp_data if days_prcp[1]]
 
+    tmin = sts.tmin(prcp)
+    tmax = sts.tmax(prcp)
+    # tavg = sts.tavg(prcp)
+
+    return make_response(jsonify({f'{start} to {end}': {'tmin': tmin, 'tmax': tmax}}))
 
 session.close()
 
